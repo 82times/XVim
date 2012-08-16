@@ -94,6 +94,10 @@ q, @
 
 The dot command ('.') is supported.
 
+## Insert mode commands
+
+C-e, C-y
+
 ## Ex commands
 
  Command   | Note
