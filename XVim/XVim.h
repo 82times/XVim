@@ -31,6 +31,7 @@
 @property (weak) XVimRegister *repeatRegister;
 @property (weak) XVimRegister *recordingRegister;
 @property (weak) XVimRegister *lastPlaybackRegister;
+@property (strong) NSString* document;
 
 - (XVimKeymap*)keymapForMode:(int)mode;
 - (XVimRegister*)findRegister:(NSString*)name;
@@ -38,7 +39,7 @@
 - (XVimHistoryHandler*)exCommandHistory;
 - (XVimHistoryHandler*)searchHistory;
 - (void)ringBell;
-- (void)onDeleteOrYank:(XVimRegister*)yankRegister;
+- (void)onDeleteOrYank:(XVimRegister*)yankRegister text:(NSString*)text;
 - (NSString*)pasteText:(XVimRegister*)yankRegister;
 - (void)writeToLogfile:(NSString*)str;
     

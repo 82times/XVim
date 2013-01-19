@@ -16,6 +16,7 @@
 #import "XVimKeyStroke.h"
 #import "XVimKeymapProvider.h"
 #import "XVimVisualEvaluator.h"
+#import "XVimDeleteEvaluator.h"
 
 @interface XVimInsertEvaluator()
 @property (nonatomic) NSRange startRange;
@@ -198,6 +199,12 @@
 	[[window sourceView] adjustCursorPosition];
 }
 
+- (BOOL)windowShouldReceive:(SEL)keySelector {
+  BOOL b = YES ^ ([NSStringFromSelector(keySelector) isEqualToString:@"C_e:"] ||
+                  [NSStringFromSelector(keySelector) isEqualToString:@"C_y:"]);
+  return b;
+}
+
 - (XVimEvaluator*)eval:(XVimKeyStroke*)keyStroke inWindow:(XVimWindow*)window{
     XVimEvaluator *nextEvaluator = self;
     SEL keySelector = [keyStroke selectorForInstance:self];
@@ -232,12 +239,6 @@
     return nextEvaluator;
 }
 
-- (BOOL)windowShouldReceive:(SEL)keySelector {
-    BOOL b = YES ^ ([NSStringFromSelector(keySelector) isEqualToString:@"C_e:"] ||
-                    [NSStringFromSelector(keySelector) isEqualToString:@"C_y:"]);
-    return b;
-}
-
 - (XVimEvaluator*)ESC:(XVimWindow*)window{
     return nil;
 }
@@ -270,6 +271,24 @@
     return self;
 }
 
+- (void)C_yC_eHelper:(XVimWindow *)window forC_y:(BOOL)handlingC_y {
+  NSUInteger currentCursorIndex = [[window sourceView] selectedRange].location;
+  NSUInteger currentColumnIndex = [[window sourceView] columnNumber:currentCursorIndex];
+  NSUInteger newCharIndex;
+  if (handlingC_y) {
+    newCharIndex = [[window sourceView] prevLine:currentCursorIndex column:currentColumnIndex count:[self numericArg] option:MOTION_OPTION_NONE];
+  } else {
+    newCharIndex = [[window sourceView] nextLine:currentCursorIndex column:currentColumnIndex count:[self numericArg] option:MOTION_OPTION_NONE];
+  }
+  NSUInteger newColumnIndex = [[window sourceView] columnNumber:newCharIndex];
+  NSLog(@"Old column: %ld\tNew column: %ld", currentColumnIndex, newColumnIndex);
+  if (currentColumnIndex == newColumnIndex) {
+    unichar u = [[[window sourceView] string] characterAtIndex:newCharIndex];
+    NSString *charToInsert = [NSString stringWithFormat:@"%c", u];
+    [[window sourceView] insertText:charToInsert];
+  }
+}
+
 - (XVimEvaluator*)C_y:(XVimWindow*)window{
     [self C_yC_eHelper:window forC_y:YES];
     return self;
@@ -280,22 +299,15 @@
     return self;
 }
 
-- (void)C_yC_eHelper:(XVimWindow *)window forC_y:(BOOL)handlingC_y {
-    NSUInteger currentCursorIndex = [[window sourceView] selectedRange].location;
-    NSUInteger currentColumnIndex = [[window sourceView] columnNumber:currentCursorIndex];
-    NSUInteger newCharIndex;
-    if (handlingC_y) {
-        newCharIndex = [[window sourceView] prevLine:currentCursorIndex column:currentColumnIndex count:[self numericArg] option:MOTION_OPTION_NONE];
-    } else {
-        newCharIndex = [[window sourceView] nextLine:currentCursorIndex column:currentColumnIndex count:[self numericArg] option:MOTION_OPTION_NONE];
-    }
-    NSUInteger newColumnIndex = [[window sourceView] columnNumber:newCharIndex];
-    NSLog(@"Old column: %ld\tNew column: %ld", currentColumnIndex, newColumnIndex);
-    if (currentColumnIndex == newColumnIndex) {
-        unichar u = [[[window sourceView] string] characterAtIndex:newCharIndex];
-        NSString *charToInsert = [NSString stringWithFormat:@"%c", u];
-        [[window sourceView] insertText:charToInsert];
-    }
+- (XVimEvaluator*)C_w:(XVimWindow*)window{
+    NSUInteger from = [[window sourceView] selectedRange].location;
+    NSUInteger to = [[window sourceView] wordsBackward:from count:[self numericArg] option:MOTION_OPTION_NONE];
+    
+	XVimDeleteAction *action = [[XVimDeleteAction alloc] initWithYankRegister: nil
+														 insertModeAtCompletion:FALSE];
+    [action motionFixedFrom:from To:to Type:CHARACTERWISE_EXCLUSIVE inWindow:window];
+    
+    return self;
 }
 
 - (XVimRegisterOperation)shouldRecordEvent:(XVimKeyStroke*)keyStroke inRegister:(XVimRegister*)xregister{

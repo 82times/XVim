@@ -7,6 +7,7 @@
 //
 
 #import "XVimKeyStroke.h"
+#import "NSEvent+VimHelper.h"
 
 static char* keynames[] = {
     "NUL",
@@ -136,7 +137,11 @@ static char* keynames[] = {
     "VERTICALLINE", // |
     "RBRACE", // }
     "TILDE", // ~
-    "DEL"
+    "DEL",
+    "HOME",
+    "END",
+    "PAGEUP",
+    "PAGEDOWN"
 };
 
 static char* readable_keynames[] = {
@@ -267,7 +272,11 @@ static char* readable_keynames[] = {
     "|", // |
     "}", // }
     "~", // ~
-    "DEL"
+    "DEL",
+    "HOME",
+    "END",
+    "PAGEUP",
+    "PAGEDOWN"
 };
 static NSMutableDictionary *s_keyCodeToSelectorString = NULL;
 static NSMutableDictionary *s_stringToKeyCode = NULL;
@@ -309,6 +318,10 @@ static NSMutableDictionary *s_stringToKeyCode = NULL;
 		map(@"Left", 63234);
 		map(@"Right", 63235);
 		map(@"ForwardDelete", 63272);
+        map(@"Home", 63273);
+        map(@"End", 63275);
+        map(@"Pageup", 63276);
+        map(@"Pagedown", 63277);
 	}
 }
 
@@ -335,14 +348,22 @@ static NSMutableDictionary *s_stringToKeyCode = NULL;
 		map(@"LEFT", 63234);
 		map(@"RIGHT", 63235);
 		map(@"FORWARD_DELETE", 63272);
+        map(@"HOME", 63273);
+        map(@"END", 63275);
+        map(@"PAGEUP", 63276);
+        map(@"PAGEDOWN", 63277);
 		
-		// Between space and del (non-inclusive), add ascii names
-		for (int i = 33; i < 127; ++i)
+		// From space to del (non-inclusive), add ascii names
+		for (int i = 32; i < 127; ++i)
 		{
 			unichar c = i;
 			NSString *string = [NSString stringWithCharacters:&c length:1];
 			map(string, i);
 		}
+
+        // Map the last key - "DEL"
+        NSString *string = [NSString stringWithCString:keynames[127] encoding:NSASCIIStringEncoding];
+        map([string uppercaseString], 127);
 	}
 }
 
@@ -382,11 +403,9 @@ static NSMutableDictionary *s_stringToKeyCode = NULL;
 {
 	XVimKeyStroke *primaryKeyStroke = nil;
 	NSUInteger modifierFlags = event.modifierFlags & (NSShiftKeyMask | NSAlternateKeyMask | NSControlKeyMask | NSCommandKeyMask);
-	NSString *charactersIgnoringModifiers = [event charactersIgnoringModifiers];
-	NSString *characters = [event characters];
 	
-	unichar unmodifiedKeyCode = [charactersIgnoringModifiers characterAtIndex:0];
-	unichar modifiedKeyCode = [characters length] > 0 ? [characters characterAtIndex:0] : unmodifiedKeyCode;
+    unichar unmodifiedKeyCode = [event unmodifiedKeyCode];
+    unichar modifiedKeyCode = [event modifiedKeyCode];
 	
 	if (modifierFlags & (NSControlKeyMask | NSCommandKeyMask))
 	{

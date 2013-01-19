@@ -18,6 +18,7 @@
 #import "XVimOptions.h"
 #import "Logger.h"
 #import <objc/runtime.h>
+#import "IDEEditorArea+XVim.h" // This is Xcode dependent. Must be moved.
 
 @interface XVimWindow() {
 	XVimEvaluator* _currentEvaluator;
@@ -108,13 +109,20 @@
 	NSArray *keystrokes = [keymap lookupKeyStrokeFromOptions:keyStrokeOptions 
 												 withPrimary:primaryKeyStroke
 												 withContext:_keymapContext];
-	if (keystrokes)
+    [NSObject cancelPreviousPerformRequestsWithTarget:self];
+    if (keystrokes)
 	{
 		for (XVimKeyStroke *keyStroke in keystrokes)
 		{
 			[self handleKeyStroke:keyStroke];
 		}
-	}
+	} else {
+        XVimOptions *options = [[XVim instance] options];
+        NSTimeInterval delay = [options.timeoutlen integerValue] / 1000.0;
+        if (delay > 0) {
+            [self performSelector:@selector(handleTimeout) withObject:nil afterDelay:delay];
+        }
+    }
 
 	NSString* argString = [_keymapContext toString];
 	if ([argString length] == 0)
@@ -125,6 +133,13 @@
 	[self.commandLine setArgumentString:argString];
     [self.commandLine setNeedsDisplay:YES];
     return YES;
+}
+
+- (void)handleTimeout {
+    for (XVimKeyStroke *keyStroke in [_keymapContext absorbedKeys]) {
+        [self handleKeyStroke:keyStroke];
+    }
+    [_keymapContext clear];
 }
 
 - (void)handleKeyStroke:(XVimKeyStroke*)keyStroke {
@@ -208,6 +223,8 @@
 
 - (void)endMouseEvent:(NSEvent*)event
 {
+    [self clearErrorMessage];
+
 	_handlingMouseEvent = NO;
 	XVimEvaluator* next = [_currentEvaluator handleMouseEvent:event inWindow:self];
 	[self willSetEvaluator:next];
@@ -240,19 +257,30 @@
 
 - (void)errorMessage:(NSString *)message ringBell:(BOOL)ringBell {
 	XVimCommandLine *commandLine = self.commandLine;
-    [commandLine errorMessage:message];
+    [commandLine errorMessage:message Timer:YES RedColorSetting:YES];
     if (ringBell) {
         [[XVim instance] ringBell];
     }
     return;
 }
 
+- (void)statusMessage:(NSString*)message {
+    XVimCommandLine *commandLine = self.commandLine;
+    [commandLine errorMessage:message Timer:NO RedColorSetting:NO];
+}
+
 - (void)clearErrorMessage
 {
 	XVimCommandLine *commandLine = self.commandLine;
-    [commandLine errorMessage:@""];
+    [commandLine errorMessage:@"" Timer:NO RedColorSetting:YES];
 }
 
+// TODO:
+// This method is highly dependent on Xcode class.
+// Must be moved or depend on abstraction layer's method.
+- (void)setForcusBackToSourceView{
+    [[[self.sourceView view] window] makeFirstResponder:[self.sourceView view]];
+}
 
 static char s_associate_key = 0;
 

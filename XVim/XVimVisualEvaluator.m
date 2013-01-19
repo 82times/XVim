@@ -301,12 +301,14 @@ static NSString* MODE_STRINGS[] = {@"-- VISUAL --", @"-- VISUAL LINE --", @"-- V
     NSUInteger loc = [view selectedRange].location;
     NSString *text = [[XVim instance] pasteText:[self yankRegister]];
     if (text.length > 0){
-        unichar uc = [text characterAtIndex:[text length] -1];
-        if ([[NSCharacterSet newlineCharacterSet] characterIsMember:uc]) {
-            if( [view isBlankLine:loc] && ![view isEOF:loc]){
-                [view setSelectedRange:NSMakeRange(loc+1,0)];
-            }else{
-                [view insertNewline];
+        if (_mode == MODE_CHARACTER) {
+            unichar uc = [text characterAtIndex:[text length] -1];
+            if ([[NSCharacterSet newlineCharacterSet] characterIsMember:uc]) {
+                if( [view isBlankLine:loc] && ![view isEOF:loc]){
+                    [view setSelectedRange:NSMakeRange(loc+1,0)];
+                }else{
+                    [view insertNewline];
+                }
             }
         }
         
@@ -314,7 +316,7 @@ static NSString* MODE_STRINGS[] = {@"-- VISUAL --", @"-- VISUAL LINE --", @"-- V
             [view insertText:text];
         }
         
-        [[NSPasteboard generalPasteboard] setString:current forType:NSStringPboardType];
+        [[XVim instance] onDeleteOrYank:[self yankRegister] text:current];
     }
     return nil;
 }
@@ -391,13 +393,22 @@ static NSString* MODE_STRINGS[] = {@"-- VISUAL --", @"-- VISUAL LINE --", @"-- V
     return [evaluator motionFixedFrom:_selection_begin To:_selection_end Type:CHARACTERWISE_INCLUSIVE inWindow:window];
 }
 
+- (XVimEvaluator*)Y:(XVimWindow*)window{
+    [self updateSelectionInWindow:window];
+	XVimOperatorAction *operatorAction = [[XVimYankAction alloc] initWithYankRegister:[self yankRegister]];
+    XVimYankEvaluator *evaluator = [[XVimYankEvaluator alloc] initWithContext:[self contextCopy]
+															   operatorAction:operatorAction 
+																   withParent:self];
+    return [evaluator motionFixedFrom:_selection_begin To:_selection_end Type:LINEWISE inWindow:window];
+}
+
 - (XVimEvaluator*)DQUOTE:(XVimWindow*)window{
     XVimEvaluator* eval = [[XVimRegisterEvaluator alloc] initWithContext:[XVimEvaluatorContext contextWithArgument:@"\""]
 																  parent:self
 															  completion:^ XVimEvaluator* (NSString* rname, XVimEvaluatorContext *context)  
 						   {
 							   XVimRegister *xregister = [[XVim instance] findRegister:rname];
-							   if (xregister.isReadOnly == NO){
+							   if (xregister.isReadOnly == NO || [xregister.displayName isEqualToString:@"%"] ){
 								   [context setYankRegister:xregister];
 								   [context appendArgument:rname];
 								   return [self withNewContext:context];
@@ -412,7 +423,7 @@ static NSString* MODE_STRINGS[] = {@"-- VISUAL --", @"-- VISUAL LINE --", @"-- V
 - (XVimEvaluator*)EQUAL:(XVimWindow*)window{
     [self updateSelectionInWindow:window];
 	
-	XVimOperatorAction *operatorAction = [[XVimEqualAction alloc] initWithYankRegister:[self yankRegister]];
+	XVimOperatorAction *operatorAction = [[XVimEqualAction alloc] init];
     XVimEqualEvaluator *evaluator = [[XVimEqualEvaluator alloc] initWithContext:[self contextCopy]
 																 operatorAction:operatorAction 
 																	 withParent:self];

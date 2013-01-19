@@ -65,7 +65,7 @@ Visual block mode is currently not supported.
 
 ## Search and Replace
 
-/, ?, #, *, g*, g#, :s, n, N
+/, ?, #, \*, g*, g#, :s, n, N
 
 Regex search is supported using the ICU regex format.
 
@@ -83,6 +83,10 @@ Currently replacing first occurence of xxxx with yyyy each line is not available
 ## Insert mode commands
 
 C-y, C-e
+
+## Print status commands
+
+C-g
 
 ## Text Object
 
@@ -124,7 +128,10 @@ C-e, C-y
   :make    | Invoke Xcode's 'build' command
   :xhelp   | Show quick help for current insertion point
   :xccmd   | Invoke arbitrary command in Xcode's actions in its menu. Takes one argument as its action to invoke. Actions [here](https://github.com/JugglerShu/XVim/blob/master/Documents/Developers/MenuActionList.txt) are available.
-  
+  :nissue  | Invoke "jump to next issue". ":ni" does the samse.
+  :pissue  | Invoke "jump to previous issue". ":pi" does the same.
+  :ncounterpart | Invoke "jump to next counterpart". ":nc" does the same.
+  :pcounterpart | Invoke "jump to previous counterpart". ":pc" does the same.
 
 
 ## Options
@@ -139,6 +146,10 @@ C-e, C-y
   [no]gdefault |
   [no]smartcase |
   guioptions | See below
+  timeoutlen | The time in milliseconds that is waited for mapped key sequence to complete (default 1000)
+  laststatus | 0 or 1 : status line is hidden, 2 : status line is displayed  (default 2)
+  [no]pasteboard | Whether yank/delete/pull uses the standard clipboard
+>>>>>>> pasteboard
 
 ## guioptions
 
@@ -156,7 +167,7 @@ These changes only take effect on startup, meaning this option is only effective
 XVim supports five map commands: map, nmap, vmap, imap, omap.
 A map command can change one or more keystrokes into one or more key strokes.
 
-Note: For multi-key mapping timeout is not supported.
+Note: The default timeout value for multi-key mapping completion is 1 seconds (1000 milliseconds). You can change it using 'timeoutlen' option.
 
 Examples: 
 

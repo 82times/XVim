@@ -21,6 +21,7 @@
 @property(readonly) XVimEvaluator *currentEvaluator;
 @property(assign) XVimCommandLine *commandLine;
 
+
 - (NSUInteger)insertionPoint;
 
 - (BOOL)handleKeyEvent:(NSEvent*)event;
@@ -47,9 +48,13 @@
 - (void)stopRecordingRegister:(XVimRegister*)xregister;
 
 - (void)errorMessage:(NSString *)message ringBell:(BOOL)ringBell;
+- (void)statusMessage:(NSString*)message;
 - (void)clearErrorMessage;
 
 - (void)associateWith:(id)object;
 + (XVimWindow*)associateOf:(id)object;
+
+
+- (void)setForcusBackToSourceView;
 
 @end

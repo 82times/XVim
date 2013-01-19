@@ -61,6 +61,7 @@ static XVim* s_instance = nil;
 @synthesize characterSearcher = _characterSearcher;
 @synthesize excmd = _excmd;
 @synthesize options = _options;
+@synthesize document = _document;
 
 +(void)receiveNotification:(NSNotification*)notification{
     if( [notification.name hasPrefix:@"IDE"] || [notification.name hasPrefix:@"DVT"] ){
@@ -78,20 +79,26 @@ static XVim* s_instance = nil;
     }
     // Entry Point of the Plugin.
     [Logger defaultLogger].level = LogTrace;
-    TRACE_LOG(@"XVim loaded");
 	
 	// Allocate singleton instance
 	s_instance = [[XVim alloc] init];
+    [s_instance.options addObserver:s_instance forKeyPath:@"debug" options:NSKeyValueObservingOptionNew context:nil];
 	[s_instance parseRcFile];
+    
+    TRACE_LOG(@"XVim loaded");
     
     // This is for reverse engineering purpose. Comment this in and log all the notifications named "IDE" or "DVT"
     //[[NSNotificationCenter defaultCenter] addObserver:[XVim class] selector:@selector(receiveNotification:) name:nil object:nil];
     
     // Do the hooking after the App has finished launching,
     // Otherwise, we may miss some classes.
+
+    // Command line window is not setuped if hook is too late.
+    [XVimHookManager hookWhenPluginLoaded];
+
     NSNotificationCenter* notificationCenter = [NSNotificationCenter defaultCenter];
     [notificationCenter addObserver: [XVimHookManager class]
-                                  selector: @selector( hook )
+                                  selector: @selector( hookWhenDidFinishLaunching )
                                    name: NSApplicationDidFinishLaunchingNotification
                                  object: nil];
 }
@@ -220,6 +227,21 @@ static XVim* s_instance = nil;
 	[super dealloc];
 }
 
+
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context{
+    if( [keyPath isEqualToString:@"debug"]) {
+        if( [s_instance options].debug ){
+            NSString *homeDir = NSHomeDirectoryForUser(NSUserName());
+            NSString *logPath = [homeDir stringByAppendingString: @"/.xvimlog"]; 
+            [[Logger defaultLogger] setLogFile:logPath];
+        }else{
+            [[Logger defaultLogger] setLogFile:nil];
+        }
+    } else if( [keyPath isEqualToString:@"document"] ){
+        self.document = [[[object document] fileURL] path];
+    }
+}
+    
 - (void)parseRcFile {
     NSString *homeDir = NSHomeDirectoryForUser(NSUserName());
     NSString *keymapPath = [homeDir stringByAppendingString: @"/.xvimrc"]; 
@@ -233,6 +255,7 @@ static XVim* s_instance = nil;
 }
 
 - (void)writeToLogfile:(NSString*)str{
+    return;
     if( ![[self.options getOption:@"debug"] boolValue] ){
         return;
     }
@@ -277,6 +300,7 @@ static XVim* s_instance = nil;
 }
 
 - (void)onDeleteOrYank:(XVimRegister*)yankRegister
+                  text:(NSString*)text
 {
     // Don't do anything if we are recording into a register (that isn't the repeat register)
     if (self.recordingRegister != nil){
@@ -285,10 +309,14 @@ static XVim* s_instance = nil;
 
     // If we are yanking into a specific register then we do not cycle through
     // the numbered registers.
-    if (yankRegister != nil){
+    if ([yankRegister.displayName isEqualToString:@"*"]){
+        [[NSPasteboard generalPasteboard] setString:text forType:NSStringPboardType];
+    }
+    else if (yankRegister != nil){
         [yankRegister clear];
-        [yankRegister appendText:[[NSPasteboard generalPasteboard]stringForType:NSStringPboardType]];
-    }else{
+        [yankRegister appendText:text];
+    }
+    else {
         // There are 10 numbered registers
         for (NSUInteger i = self.numberedRegisters.count - 2; ; --i){
             XVimRegister *prev = [self.numberedRegisters objectAtIndex:i];
@@ -303,18 +331,33 @@ static XVim* s_instance = nil;
         
         XVimRegister *reg = [self.numberedRegisters objectAtIndex:0];
         [reg clear];
-        [reg appendText:[[NSPasteboard generalPasteboard]stringForType:NSStringPboardType]];
+        [reg appendText:text];
+        
+        if ( self.options.pasteboard ) {
+            [[NSPasteboard generalPasteboard] setString:text forType:NSStringPboardType];
+        }
     }
+    
+    XVimRegister *defaultReg = [self findRegister:@"DQUOTE"];
+    [defaultReg clear];
+    [defaultReg appendText:text];
 }
 
 - (NSString*)pasteText:(XVimRegister*)yankRegister
 {
-	if (yankRegister)
+    if ([yankRegister.displayName isEqualToString:@"*"]) {
+        return [[NSPasteboard generalPasteboard]stringForType:NSStringPboardType];
+    }
+	else if (yankRegister)
 	{
 		return yankRegister.text;
 	}
-
-    return [[NSPasteboard generalPasteboard]stringForType:NSStringPboardType];
+    else if (self.options.pasteboard) {
+        return [[NSPasteboard generalPasteboard] stringForType:NSStringPboardType];
+    }
+    else {
+        return [[self findRegister:@"DQUOTE"] text];
+    }
 }
 
 @end

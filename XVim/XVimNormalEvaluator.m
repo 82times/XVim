@@ -245,6 +245,23 @@
     return nil;
 }
 
+- (XVimEvaluator*)C_g:(XVimWindow*)window{
+    // process
+    NSRange range = [[window sourceView] selectedRange];
+    NSUInteger numberOfLines = [[window sourceView] numberOfLines];
+    long long lineNumber = [[window sourceView] currentLineNumber];
+    NSUInteger columnNumber = [[window sourceView] columnNumber:range.location];
+    NSURL* documentURL = [[window sourceView] documentURL];
+	if( [documentURL isFileURL] ) {
+		NSString* filename = [documentURL path];
+		NSString* text = [NSString stringWithFormat:@"%@   line %lld of %ld --%d%%-- col %ld",
+                          filename, lineNumber, numberOfLines, (int)((float)lineNumber*100.0/(float)numberOfLines), columnNumber+1 ];
+        
+		[window statusMessage:text];
+	}
+    return nil;
+}
+
 - (XVimEvaluator*)g:(XVimWindow*)window{
     return [[XVimGActionEvaluator alloc] initWithContext:[[self contextCopy] appendArgument:@"g"]
 												  parent:self];
@@ -505,11 +522,24 @@
 	// Xcode crashes if we cut a zero length selection
 	if (replacementRange.length > 0)
 	{
-		[view cutText]; // Can't use del here since we may want to wind up at end of line
+		[view insertText:@"" replacementRange:replacementRange]; // Can't use del here since we may want to wind up at end of line
 	}
 	
     return [[XVimInsertEvaluator alloc] initWithContext:[[XVimEvaluatorContext alloc] init]
 											oneCharMode:NO];
+}
+
+// "S" is Synonym for "cc"
+- (XVimEvaluator*)S:(XVimWindow*)window{
+	XVimOperatorAction *action = [[XVimDeleteAction alloc] initWithYankRegister:[self yankRegister]
+														 insertModeAtCompletion:TRUE];
+
+	if( [self numericArg] < 1 )
+		return nil;
+
+    XVimSourceView* view = [window sourceView];
+    NSUInteger end = [view nextLine:[view selectedRange].location column:0 count:[self numericArg]-1 option:MOTION_OPTION_NONE];
+    return [action motionFixedFrom:[view selectedRange].location To:end Type:LINEWISE inWindow:window];
 }
 
 - (XVimEvaluator*)u:(XVimWindow*)window{
@@ -639,7 +669,7 @@
 																								 completion:^ XVimEvaluator* (NSString* rname, XVimEvaluatorContext *context) 
 	{
 		XVimRegister *xregister = [[XVim instance] findRegister:rname];
-        if (xregister.isReadOnly == NO)
+        if (xregister.isReadOnly == NO || [xregister.displayName isEqualToString:@"%"] )
 		{
 			[context setYankRegister:xregister];
 			[context appendArgument:rname];
@@ -653,7 +683,7 @@
 }
 
 - (XVimEvaluator*)EQUAL:(XVimWindow*)window{
-	XVimOperatorAction *operatorAction = [[XVimEqualAction alloc] initWithYankRegister:[self yankRegister]];
+    XVimOperatorAction *operatorAction = [[XVimEqualAction alloc] init];
     return [[XVimEqualEvaluator alloc] initWithContext:[[self contextCopy] appendArgument:@"="]
 										operatorAction:operatorAction 
 											withParent:self];
@@ -822,4 +852,11 @@ static NSArray *_invalidRepeatKeys;
 	return [self x:window];
 }
 
+-(XVimEvaluator*)Pageup:(XVimWindow*)window{
+    return [self C_b:(XVimWindow*)window];
+}
+
+-(XVimEvaluator*)Pagedown:(XVimWindow*)window{
+    return [self C_f:(XVimWindow*)window];
+}
 @end

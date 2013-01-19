@@ -18,6 +18,7 @@
 #import "XVimKeyStroke.h"
 #import "XVimKeymap.h"
 #import "XVimOptions.h"
+#import "IDEKit.h"
 
 @implementation XVimExArg
 @synthesize arg,cmd,forceit,lineBegin,lineEnd,addr_count;
@@ -129,6 +130,7 @@
                        CMD(@"colder", @"qf_age:inWindow:"),
                        CMD(@"colorscheme", @"colorscheme:inWindow:"),
                        CMD(@"command", @"command:inWindow:"),
+                       CMD(@"commit", @"commit:inWindow:"),    // Source control commit (XVim Original)
                        CMD(@"comclear", @"comclear:inWindow:"),
                        CMD(@"compiler", @"compiler:inWindow:"),
                        CMD(@"continue", @"continue:inWindow:"),
@@ -146,7 +148,7 @@
                        CMD(@"cwindow", @"cwindow:inWindow:"),
                        CMD(@"delete", @"operators:inWindow:"),
                        CMD(@"delmarks", @"delmarks:inWindow:"),
-                       CMD(@"debug", @"debug:inWindow:"),
+                       CMD(@"debug", @"debug:inWindow:"),  // This currently works as XVim debug command
                        CMD(@"debuggreedy", @"debuggreedy:inWindow:"),
                        CMD(@"delcommand", @"delcommand:inWindow:"),
                        CMD(@"delfunction", @"delfunction:inWindow:"),
@@ -310,7 +312,9 @@
                        CMD(@"mzfile", @"mzfile:inWindow:"),
                        CMD(@"next", @"next:inWindow:"),
                        CMD(@"nbkey", @"nbkey:inWindow:"),
+                       CMD(@"ncounterpart", @"ncounterpart:inWindow:"),    // XVim Original
                        CMD(@"new", @"splitview:inWindow:"),
+                       CMD(@"nissue", @"nissue:inWindow:"),    // XVim Original
                        CMD(@"nmap", @"nmap:inWindow:"),
                        CMD(@"nmapclear", @"mapclear:inWindow:"),
                        CMD(@"nmenu", @"menu:inWindow:"),
@@ -337,10 +341,12 @@
                        CMD(@"ounmap", @"unmap:inWindow:"),
                        CMD(@"ounmenu", @"menu:inWindow:"),
                        CMD(@"print", @"print:inWindow:"),
+                       CMD(@"pcounterpart", @"pcounterpart:inWindow:"),    // XVim Original (This overrides original Vim's :pc command)
                        CMD(@"pclose", @"pclose:inWindow:"),
                        CMD(@"perl", @"perl:inWindow:"),
                        CMD(@"perldo", @"perldo:inWindow:"),
                        CMD(@"pedit", @"pedit:inWindow:"),
+                       CMD(@"pissue", @"pissue:inWindow:"),    // XVim Original
                        CMD(@"pop", @"tag:inWindow:"),
                        CMD(@"popup", @"popup:inWindow:"),
                        CMD(@"ppop", @"ptag:inWindow:"),
@@ -427,6 +433,7 @@
                        CMD(@"snoremenu", @"menu:inWindow:"),
                        CMD(@"source", @"source:inWindow:"),
                        CMD(@"sort", @"sort:inWindow:"),
+                       CMD(@"sort!", @"sort:inWindow:"),
                        CMD(@"split", @"splitview:inWindow:"),
                        CMD(@"spellgood", @"spell:inWindow:"),
                        CMD(@"spelldump", @"spelldump:inWindow:"),
@@ -829,6 +836,9 @@
 ///////////////////
 //   Commands    //
 ///////////////////
+- (void)commit:(XVimExArg*)args inWindow:(XVimWindow*)window{
+    [NSApp sendAction:@selector(commitCommand:) to:nil from:self];
+}
 
 - (void)sub:(XVimExArg*)args inWindow:(XVimWindow*)window
 {
@@ -874,12 +884,12 @@
 - (void)exit:(XVimExArg*)args inWindow:(XVimWindow*)window
 { // :wq
     [NSApp sendAction:@selector(saveDocument:) to:nil from:self];
-    [NSApp terminate:self];
+    [NSApp sendAction:@selector(closeDocument:) to:nil from:self];
 }
 
 - (void)quit:(XVimExArg*)args inWindow:(XVimWindow*)window
 { // :q
-    [NSApp terminate:self];
+    [NSApp sendAction:@selector(closeDocument:) to:nil from:self];
 }
 
 /*
@@ -929,11 +939,13 @@
 		
 		[subStrings addObject:string];
 	}
-		
-	if (subStrings.count == 2)
+  
+	if (subStrings.count >= 2)
 	{
 		NSString *fromString = [subStrings objectAtIndex:0];
-		NSString *toString = [subStrings objectAtIndex:1];
+    
+    [subStrings removeObjectAtIndex:0];
+		NSString *toString = [subStrings componentsJoinedByString:@" "]; // get all args seperate by space
 		
 		NSMutableArray *fromKeyStrokes = [[NSMutableArray alloc] init];
 		[XVimKeyStroke fromString:fromString to:fromKeyStrokes];
@@ -999,6 +1011,28 @@
     [NSApp sendAction:@selector(closeCurrentTab:) to:nil from:self];
 }
 
+- (void)nissue:(XVimExArg*)args inWindow:(XVimWindow*)window{
+    [NSApp sendAction:@selector(jumpToNextIssue:) to:nil from:self];
+}
+
+- (void)pissue:(XVimExArg*)args inWindow:(XVimWindow*)window{
+    [NSApp sendAction:@selector(jumpToPreviousIssue:) to:nil from:self];
+}
+
+- (void)ncounterpart:(XVimExArg*)args inWindow:(XVimWindow*)window{
+    // To make forcus proper
+    // We must make forcus back to editor first then invoke the command.
+    // This is because I do not know how to move focus on newly visible text editor by invoking this command.
+    // Without this focus manipulation the focus after the command does not goes to the text editor
+    [window setForcusBackToSourceView];
+    [NSApp sendAction:@selector(jumpToNextCounterpart:) to:nil from:self];
+}
+
+- (void)pcounterpart:(XVimExArg*)args inWindow:(XVimWindow*)window{
+    [window setForcusBackToSourceView];
+    [NSApp sendAction:@selector(jumpToPreviousCounterpart:) to:nil from:self];
+}
+
 - (void)xhelp:(XVimExArg*)args inWindow:(XVimWindow*)window
 {
     [NSApp sendAction:@selector(showQuickHelp:) to:nil from:self];
@@ -1006,6 +1040,37 @@
 
 - (void)xccmd:(XVimExArg*)args inWindow:(XVimWindow*)window{
     SEL sel = NSSelectorFromString([[args arg] stringByAppendingString:@":"]);
+    [window setForcusBackToSourceView];
     [NSApp sendAction:sel  to:nil from:self];
 }
+
+- (void)sort:(XVimExArg *)args inWindow:(XVimWindow *)window
+{
+    XVimSourceView *view = [window sourceView];
+	NSRange range = NSMakeRange([args lineBegin], [args lineEnd] - [args lineBegin] + 1);
+    
+    NSString *cmdString = [[args cmd] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+    NSString *argsString = [args arg];
+    XVimSortOptions options = 0;
+    
+    if ([cmdString characterAtIndex:[cmdString length] - 1] == '!') {
+        options |= XVimSortOptionReversed;
+    }
+    
+    if (argsString) {
+        #define STR_CONTAINS_ARG(str, arg) ([str rangeOfCharacterFromSet:[NSCharacterSet characterSetWithCharactersInString:arg]].location != NSNotFound)
+        if (STR_CONTAINS_ARG(argsString, @"n")) {
+            options |= XVimSortOptionNumericSort;
+        }
+        if (STR_CONTAINS_ARG(argsString, @"i")) {
+            options |= XVimSortOptionIgnoreCase;
+        }
+        if (STR_CONTAINS_ARG(argsString, @"u")) {
+            options |= XVimSortOptionRemoveDuplicateLines;
+        }
+    }
+    
+    [view sortLinesInRange:range withOptions:options];
+}
+
 @end

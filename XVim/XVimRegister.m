@@ -10,10 +10,13 @@
 #import "XVimEvaluator.h"
 #import "XVimKeyStroke.h"
 #import "XVimPlaybackHandler.h"
+#import "XVim.h"
+#import "Logger.h"
 
 @interface XVimRegister() {
 	NSRange _selectedRange;
 	VISUAL_MODE _visualMode;
+    NSMutableString* _text;
 }
 @property (readwrite) BOOL isPlayingBack;
 @property (strong) NSMutableArray *keyEventsAndInsertedText;
@@ -21,11 +24,38 @@
 
 @implementation XVimRegister
 
-@synthesize text = _text;
 @synthesize displayName = _displayName;
 @synthesize isPlayingBack = _isPlayingBack;
 @synthesize keyEventsAndInsertedText = _keyEventsAndInsertedText;
 @synthesize nonNumericKeyCount = _nonNumericKeyCount;
+
+-(void)setText:(NSMutableString*)text
+{
+	@synchronized(self)
+	{
+		if( ![_displayName isEqualToString:@"%"] ) {
+			if( text != _text ){
+				[_text release];
+				_text = [text retain];
+			}
+		} else {
+			ERROR_LOG( "assert!" );
+		}
+	}
+}
+
+-(NSMutableString*)text
+{
+	@synchronized(self)
+	{
+		if( [_displayName isEqualToString:@"%"] ){
+            // current file name register
+			return [NSMutableString stringWithString:[XVim instance].document];
+		} else {
+			return [[_text retain] autorelease];
+		}
+	}
+}
 
 -(NSString*) description{
     return [[NSString alloc] initWithFormat:@"\"%@: %@", self.displayName, self.text];
@@ -62,15 +92,20 @@
 }
 
 -(BOOL) isRepeat{
-    return self.displayName == @"repeat";
+    return [self.displayName isEqualToString:@"repeat"];
 }
 
 -(BOOL) isReadOnly{
-    return self.displayName == @":" ||
-    self.displayName == @"." ||
-    self.displayName == @"%" ||
-    self.displayName == @"#" ||
-    self.isRepeat;
+    BOOL readonly;
+    NSCharacterSet *readonlyTokenCharacterSet = [NSCharacterSet characterSetWithCharactersInString:@":.%#"];
+    if ([_displayName length] == 1) {
+        unichar character = [_displayName characterAtIndex:0];
+        readonly = [readonlyTokenCharacterSet characterIsMember:character];
+    } else {
+        readonly = NO;
+    }
+    
+    return readonly || self.isRepeat;
 }
 
 -(BOOL) isEqual:(id)object{
